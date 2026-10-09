@@ -29,7 +29,7 @@ jobs:
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       # The same commands as ## Verify in CLAUDE.md, so CI and the loop agree on green.
       - name: Install
