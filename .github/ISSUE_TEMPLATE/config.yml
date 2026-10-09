@@ -1,3 +1,7 @@
 # Keep blank issues available for quick notes, but steer toward the structured
 # templates. See docs/ISSUE_GUIDE.md for the full convention.
 blank_issues_enabled: true
+contact_links:
+  - name: Issue guide
+    url: https://github.com/highhair20/backlog-loop-example/blob/main/docs/ISSUE_GUIDE.md
+    about: How issues here are written and labelled. Read it before opening one.
