@@ -1,0 +1,27 @@
+name: Template self-test
+
+# Tests the template's own scripts. Inert in repos created from the template
+# (the job only runs in a repo named backlog-loop, or claude-code-repo-template before
+# the rename: this one and its forks); safe to delete there.
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  sync-guardrails:
+    if: contains(fromJSON('["backlog-loop", "claude-code-repo-template"]'), github.event.repository.name)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The two commands under "Verify" in this repo's CLAUDE.md, so CI and the
+      # backlog loop agree on green. run-tests.sh runs every scripts/test-*.sh, so a
+      # new test needs no step here.
+      - name: Test scripts
+        run: scripts/run-tests.sh
+      # Preinstalled on ubuntu-latest. Warning level and up; style notes are advisory.
+      - name: Lint shell scripts
+        run: shellcheck --severity=warning scripts/*.sh .claude/hooks/*.sh

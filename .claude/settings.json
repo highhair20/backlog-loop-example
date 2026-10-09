@@ -1,0 +1,90 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash|mcp__github__create_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/pr-created-review.sh\"",
+            "timeout": 10,
+            "statusMessage": "Checking for new PR..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/pr-review-gate.sh\"",
+            "timeout": 10,
+            "statusMessage": "Checking PR review loop..."
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "mcp__github__merge_pull_request",
+      "mcp__github__enable_pr_auto_merge",
+      "mcp__github__push_files",
+      "mcp__github__create_or_update_file",
+      "mcp__github__delete_file",
+      "mcp__github__actions_run_trigger",
+      "mcp__github__pull_request_review_write",
+      "mcp__github__create_repository",
+      "mcp__github__fork_repository",
+      "Bash(gh pr merge:*)",
+      "Bash(gh api *pulls/*/merge*)",
+      "Bash(git push)",
+      "Bash(git push * main)",
+      "Bash(git push * main *)",
+      "Bash(git push *:main)",
+      "Bash(git push *:main *)",
+      "Bash(git push *+main*)",
+      "Bash(git push -f*)",
+      "Bash(git push * -f*)",
+      "Bash(git push *--force*)",
+      "Bash(git push *--ta*)",
+      "Bash(git push *--mirror*)",
+      "Bash(git push *refs/tags/*)",
+      "Bash(git push * v*)",
+      "Bash(git push *--fol*)",
+      "Bash(git push *+v*)",
+      "Bash(git -* push*)",
+      "Bash(git push *heads/main*)",
+      "Bash(git push * :refs/*)",
+      "Bash(git fetch *--u*)",
+      "Bash(git pull *--u*)",
+      "Bash(git ls-remote *--u*)",
+      "Bash(git fetch *--e*)",
+      "Bash(git pull *--e*)",
+      "Bash(git ls-remote *--e*)",
+      "Bash(git push *--rec*)",
+      "Bash(git push *--e*)",
+      "Bash(git diff *--ou*)",
+      "Bash(git log *--ou*)",
+      "Bash(git show *--ou*)",
+      "Bash(git -* fetch *--u*)",
+      "Bash(git -* fetch *--e*)",
+      "Bash(git -* pull *--u*)",
+      "Bash(git -* pull *--e*)",
+      "Bash(git -* ls-remote *--u*)",
+      "Bash(git -* ls-remote *--e*)",
+      "Bash(git -* diff *--ou*)",
+      "Bash(git -* log *--ou*)",
+      "Bash(git -* show *--ou*)",
+      "Bash(git config)",
+      "Bash(git -* config*)",
+      "Bash(git -c*)",
+      "Bash(git --config-env*)",
+      "Bash(git -* -c*)",
+      "Bash(git -* --config-env*)",
+      "Bash(git config *)"
+    ]
+  }
+}
