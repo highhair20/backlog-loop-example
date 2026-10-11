@@ -99,6 +99,69 @@ def test_needs_two_slots_to_know_the_slot_length():
         best_window(slots("2026-10-09T00:00", 60, [100]), timedelta(hours=1))
 
 
+# --- gaps ---
+
+
+def gappy(intensities: dict[str, float]) -> list[Slot]:
+    return [Slot(datetime.fromisoformat(t), v) for t, v in intensities.items()]
+
+
+# The issue's repro: 02:00 is missing.
+GAP_AT_2AM = {
+    "2026-10-09T00:00": 300,
+    "2026-10-09T01:00": 100,
+    "2026-10-09T03:00": 100,
+    "2026-10-09T04:00": 300,
+}
+GAP_AT_2AM_MESSAGE = "gap: no slot between 2026-10-09 01:00 and 2026-10-09 03:00"
+
+
+def test_best_window_avoids_a_gap():
+    best = best_window(gappy(GAP_AT_2AM), timedelta(hours=2))
+    # 01:00-03:00 (mean 100) spans the gap; 00:00 and 03:00 tie at 200, earliest wins.
+    assert best.start == datetime(2026, 10, 9, 0)
+    assert best.end == datetime(2026, 10, 9, 2)
+    assert best.mean_intensity == pytest.approx(200)
+
+
+def test_best_window_names_the_gap_when_no_window_fits():
+    with pytest.raises(ForecastError, match=GAP_AT_2AM_MESSAGE):
+        best_window(gappy(GAP_AT_2AM), timedelta(hours=3))
+
+
+def test_window_at_refuses_a_window_across_a_gap():
+    with pytest.raises(ForecastError, match=GAP_AT_2AM_MESSAGE):
+        window_at(gappy(GAP_AT_2AM), 1, timedelta(hours=2))
+
+
+def test_window_at_accepts_a_window_beside_a_gap():
+    now = window_at(gappy(GAP_AT_2AM), 0, timedelta(hours=2))
+    assert now.mean_intensity == pytest.approx(200)
+
+
+def test_a_gap_between_the_first_two_slots_is_still_a_gap():
+    forecast = gappy(
+        {
+            "2026-10-09T00:00": 100,
+            "2026-10-09T02:00": 300,
+            "2026-10-09T03:00": 300,
+            "2026-10-09T04:00": 300,
+        }
+    )
+    best = best_window(forecast, timedelta(hours=2))
+    # Slots are 1 h (the smallest step), so 00:00 is a single 1 h slot, not a 2 h run.
+    assert best.start == datetime(2026, 10, 9, 2)
+    assert best.end == datetime(2026, 10, 9, 4)
+    assert best.mean_intensity == pytest.approx(300)
+
+
+def test_rejects_two_slots_with_the_same_start():
+    forecast = gappy({"2026-10-09T00:00": 100, "2026-10-09T01:00": 100})
+    duplicate = [*forecast, Slot(datetime(2026, 10, 9, 1), 200)]
+    with pytest.raises(ForecastError, match="same start time"):
+        best_window(duplicate, timedelta(hours=1))
+
+
 # --- savings ---
 
 
