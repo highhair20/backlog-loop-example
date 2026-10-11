@@ -110,7 +110,7 @@ def test_rejects_a_non_finite_or_too_large_duration(tmp_path, capsys, hours):
     assert_one_line_error(capsys, "--hours")
 
 
-def test_accepts_hours_up_to_the_limit(tmp_path, capsys):
+def test_hours_at_the_limit_passes_the_flag_check(tmp_path, capsys):
     path = tmp_path / "f.csv"
     path.write_text(FORECAST)
     assert main([str(path), f"--hours={MAX_HOURS}"]) == 1

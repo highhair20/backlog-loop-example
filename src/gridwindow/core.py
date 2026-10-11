@@ -56,8 +56,9 @@ def _read_rows(path: Path) -> list[tuple[int, Slot]]:
             reader = csv.DictReader(f)
             if not set(COLUMNS) <= set(reader.fieldnames or ()):
                 raise ForecastError(f"{path}: needs 'start' and 'intensity' columns")
-            # line_num, not a row count: DictReader skips blank lines. It is read after
-            # each row is fetched, so it is that row's line.
+            # line_num, not a row count: DictReader skips blank lines. Read after each row
+            # is fetched, it is the row's last line (its only line unless a quoted field
+            # spans lines).
             return [(reader.line_num, _parse_row(path, reader.line_num, row)) for row in reader]
     except UnicodeDecodeError as e:
         # e.start counts from the decoder's current chunk, not the file, so it is left out.
