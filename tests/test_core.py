@@ -59,6 +59,66 @@ def test_rejects_a_negative_intensity(tmp_path):
         read_forecast(path)
 
 
+@pytest.mark.parametrize("value", ["nan", "inf", "-inf", "NaN", "Infinity"])
+def test_rejects_a_non_finite_intensity_with_its_line(tmp_path, value):
+    path = write_csv(tmp_path, f"start,intensity\n2026-10-09T00:00,200\n2026-10-09T01:00,{value}\n")
+    with pytest.raises(ForecastError, match=r"forecast\.csv:3: .*finite"):
+        read_forecast(path)
+
+
+def test_rejects_a_duplicate_first_start_with_its_line(tmp_path):
+    path = write_csv(
+        tmp_path,
+        "start,intensity\n2026-10-09T00:00,300\n2026-10-09T00:00,100\n2026-10-09T01:00,100\n",
+    )
+    with pytest.raises(ForecastError, match=r"forecast\.csv:3: .*duplicate"):
+        read_forecast(path)
+
+
+def test_rejects_a_later_duplicate_start_with_its_line(tmp_path):
+    path = write_csv(
+        tmp_path,
+        "start,intensity\n2026-10-09T00:00,300\n2026-10-09T01:00,100\n"
+        "2026-10-09T02:00,100\n2026-10-09T01:00,50\n",
+    )
+    with pytest.raises(ForecastError, match=r"forecast\.csv:5: .*duplicate"):
+        read_forecast(path)
+
+
+def test_rejects_mixed_timezones_with_the_line(tmp_path):
+    path = write_csv(
+        tmp_path, "start,intensity\n2026-10-09T00:00,300\n2026-10-09T01:00+00:00,100\n"
+    )
+    with pytest.raises(ForecastError, match=r"forecast\.csv:3: .*timezone"):
+        read_forecast(path)
+
+
+def test_accepts_rows_that_all_have_the_same_timezone(tmp_path):
+    path = write_csv(
+        tmp_path, "start,intensity\n2026-10-09T00:00+01:00,300\n2026-10-09T01:00+01:00,100\n"
+    )
+    assert [s.intensity for s in read_forecast(path)] == [300.0, 100.0]
+
+
+def test_reads_a_file_with_a_utf8_byte_order_mark(tmp_path):
+    path = tmp_path / "forecast.csv"
+    path.write_bytes(b"\xef\xbb\xbfstart,intensity\n2026-10-09T00:00,200\n")
+    assert read_forecast(path) == [Slot(datetime(2026, 10, 9, 0), 200.0)]
+
+
+def test_reports_a_file_that_is_not_utf8(tmp_path):
+    path = tmp_path / "forecast.csv"
+    path.write_bytes("start,intensity\n2026-10-09T00:00,200 µ\n".encode("latin-1"))
+    with pytest.raises(ForecastError, match=r"forecast\.csv: .*UTF-8"):
+        read_forecast(path)
+
+
+def test_reports_an_oversized_field(tmp_path):
+    path = write_csv(tmp_path, "start,intensity\n2026-10-09T00:00," + "9" * 200_000 + "\n")
+    with pytest.raises(ForecastError, match=r"forecast\.csv"):
+        read_forecast(path)
+
+
 # --- best_window ---
 
 
