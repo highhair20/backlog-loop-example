@@ -81,11 +81,28 @@ def window_at(slots: list[Slot], index: int, duration: timedelta) -> Window:
     return Window(covered[0].start, covered[0].start + duration, mean)
 
 
-def best_window(slots: list[Slot], duration: timedelta) -> Window:
-    """The window of `duration` with the lowest mean intensity; the earliest on a tie."""
+def best_window(slots: list[Slot], duration: timedelta, deadline: datetime | None = None) -> Window:
+    """The window of `duration` with the lowest mean intensity; the earliest on a tie.
+
+    With a `deadline`, only windows that end at or before it are considered.
+    """
     count = _slot_count(slots, duration)
     windows = [window_at(slots, i, duration) for i in range(len(slots) - count + 1)]
+    if deadline is not None:
+        _check_same_timezone_kind(slots, deadline)
+        windows = [w for w in windows if w.end <= deadline]
+        if not windows:
+            raise ForecastError(f"no {duration} run ends by {deadline.isoformat()}")
     return min(windows, key=lambda w: w.mean_intensity)
+
+
+def _check_same_timezone_kind(slots: list[Slot], deadline: datetime) -> None:
+    # Python cannot compare a naive datetime with an aware one; say so plainly.
+    forecast_has_tz = slots[0].start.tzinfo is not None
+    deadline_has_tz = deadline.tzinfo is not None
+    if forecast_has_tz != deadline_has_tz:
+        has, lacks = ("deadline", "forecast") if deadline_has_tz else ("forecast", "deadline")
+        raise ForecastError(f"the {has} has a timezone but the {lacks} does not")
 
 
 def savings_grams(now: Window, best: Window, power_kw: float) -> float:

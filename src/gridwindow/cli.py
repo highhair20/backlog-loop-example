@@ -1,10 +1,10 @@
-"""Command line: gridwindow <forecast.csv> --hours H [--power-kw P]."""
+"""Command line: gridwindow <forecast.csv> --hours H [--power-kw P] [--deadline T]."""
 
 from __future__ import annotations
 
 import argparse
 import sys
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from gridwindow.core import ForecastError, best_window, read_forecast, savings_grams, window_at
@@ -18,6 +18,11 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("forecast", type=Path, help="CSV with start (ISO 8601) and intensity columns")
     p.add_argument("--hours", type=float, required=True, help="how long the appliance runs")
     p.add_argument("--power-kw", type=float, default=1.0, help="its average draw (default 1 kW)")
+    p.add_argument(
+        "--deadline",
+        type=datetime.fromisoformat,
+        help="ISO 8601 time the run must finish by (default: the end of the forecast)",
+    )
     return p
 
 
@@ -30,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     duration = timedelta(hours=args.hours)
     try:
         slots = read_forecast(args.forecast)
-        best = best_window(slots, duration)
+        best = best_window(slots, duration, args.deadline)
         now = window_at(slots, 0, duration)
     except (ForecastError, OSError) as e:
         return _fail(str(e))
