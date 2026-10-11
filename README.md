@@ -20,7 +20,7 @@ Saves 340 g CO2 versus starting now (205 gCO2/kWh)
 
 A forecast is a CSV with a `start` column (ISO 8601) and an `intensity` column
 (gCO2/kWh), one row per slot. Slots are all the same length; it takes the length from
-the first two rows, so any fixed length works: hourly, half-hourly, or 15 minutes.
+the first two rows, so a fixed length such as hourly or half-hourly works.
 `--hours` must be a whole number of slots, so `--hours 1.5` works on a half-hourly
 forecast but not on an hourly one. The sample in `examples/` uses made-up values. Real forecasts come
 from grid operators, for example the [Carbon Intensity API](https://carbonintensity.org.uk/)
