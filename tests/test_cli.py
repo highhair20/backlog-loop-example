@@ -51,12 +51,11 @@ def test_a_deadline_limits_the_start_time(tmp_path, capsys):
 
 
 def test_the_readme_deadline_example(capsys):
-    sample = Path(__file__).parent.parent / "examples" / "sample-day.csv"
-    assert main([str(sample), "--hours", "2", "--deadline", "2026-10-09T07:00"]) == 0
-    assert capsys.readouterr().out == (
-        "Start at 2026-10-09 04:00: 172 gCO2/kWh on average\n"
-        "Saves 65 g CO2 versus starting now (205 gCO2/kWh)\n"
-    )
+    root = Path(__file__).parent.parent
+    flags = ["--hours", "2", "--deadline", "2026-10-09T07:00"]
+    assert main([str(root / "examples" / "sample-day.csv"), *flags]) == 0
+    example = f"$ gridwindow examples/sample-day.csv {' '.join(flags)}\n{capsys.readouterr().out}"
+    assert example in (root / "README.md").read_text()
 
 
 def test_a_deadline_with_no_fitting_window_exits_1(tmp_path, capsys):
