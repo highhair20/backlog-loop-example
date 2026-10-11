@@ -83,4 +83,7 @@ def test_a_malformed_deadline_is_a_usage_error(tmp_path, capsys):
     with pytest.raises(SystemExit) as exc:
         main([str(path), "--hours", "1", "--deadline", "tomorrow"])
     assert exc.value.code == 2
-    assert "--deadline" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "--deadline" in err
+    assert "ISO 8601" in err
+    assert "fromisoformat" not in err

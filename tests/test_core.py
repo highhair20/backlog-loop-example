@@ -132,6 +132,14 @@ def test_a_deadline_after_the_forecast_changes_nothing():
     assert late == best_window(forecast, duration)
 
 
+def test_an_aware_deadline_compares_across_offsets():
+    forecast = slots("2026-10-09T00:00+00:00", 60, DEADLINE_FORECAST)
+    # 04:00+01:00 is 03:00 UTC: same answer as the naive 03:00 case above.
+    deadline = datetime.fromisoformat("2026-10-09T04:00+01:00")
+    best = best_window(forecast, timedelta(hours=1), deadline=deadline)
+    assert best.start == datetime.fromisoformat("2026-10-09T01:00+00:00")
+
+
 @pytest.mark.parametrize(
     ("forecast_start", "deadline"),
     [

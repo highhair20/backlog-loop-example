@@ -20,10 +20,20 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--power-kw", type=float, default=1.0, help="its average draw (default 1 kW)")
     p.add_argument(
         "--deadline",
-        type=datetime.fromisoformat,
-        help="ISO 8601 time the run must finish by (default: the end of the forecast)",
+        type=_iso_time,
+        help="ISO 8601 time the run must finish by; a date alone means 00:00 "
+        "(default: the end of the forecast)",
     )
     return p
+
+
+def _iso_time(value: str) -> datetime:
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(
+            f"expected an ISO 8601 time such as 2026-10-09T07:00, got {value!r}"
+        ) from e
 
 
 def main(argv: list[str] | None = None) -> int:
