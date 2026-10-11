@@ -59,7 +59,9 @@ def _parse_row(path: Path, line: int, row: dict[str, str]) -> Slot:
 def slot_length(slots: list[Slot]) -> timedelta:
     """The forecast's slot length: the smallest step between consecutive slots.
 
-    Any larger step is a gap in the forecast, wherever it falls.
+    Any larger step is a gap in the forecast, wherever it falls. A forecast whose
+    every step is equally wide (e.g. 00:00, 02:00, 04:00) reads as 2 h slots: with
+    no other information, a missing slot there cannot be told from a longer one.
     """
     if len(slots) < 2:
         raise ForecastError("a forecast needs at least two slots to show its slot length")
@@ -116,7 +118,8 @@ def best_window(slots: list[Slot], duration: timedelta) -> Window:
     if not windows:
         # Every run spans a gap, so the forecast has at least one.
         gap = _first_gap(slots, step)
-        raise ForecastError(f"no {duration} run fits between gaps; {_gap_message(gap)}")
+        detail = _gap_message(gap) if gap is not None else "the forecast has a gap"
+        raise ForecastError(f"no {duration} run fits between gaps; {detail}")
     return min(windows, key=lambda w: w.mean_intensity)
 
 
