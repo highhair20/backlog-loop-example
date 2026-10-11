@@ -38,6 +38,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.power_kw <= 0:
         return _fail("--power-kw must be more than 0")
     duration = timedelta(hours=args.hours)
+    if not duration:
+        return _fail("--hours is too small (rounds to no time at all)")
     try:
         slots = read_forecast(args.forecast)
         best = best_window(slots, duration)

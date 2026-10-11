@@ -81,7 +81,21 @@ def test_rejects_a_later_duplicate_start_with_its_line(tmp_path):
         "start,intensity\n2026-10-09T00:00,300\n2026-10-09T01:00,100\n"
         "2026-10-09T02:00,100\n2026-10-09T01:00,50\n",
     )
-    with pytest.raises(ForecastError, match=r"forecast\.csv:5: .*duplicate"):
+    with pytest.raises(ForecastError, match=r"forecast\.csv:5: .*duplicate.*line 3"):
+        read_forecast(path)
+
+
+def test_rejects_the_same_instant_written_with_different_offsets(tmp_path):
+    path = write_csv(
+        tmp_path, "start,intensity\n2026-10-25T01:00+01:00,300\n2026-10-25T00:00+00:00,100\n"
+    )
+    with pytest.raises(ForecastError, match=r"forecast\.csv:3: .*line 2"):
+        read_forecast(path)
+
+
+def test_line_numbers_count_blank_lines(tmp_path):
+    path = write_csv(tmp_path, "start,intensity\n2026-10-09T00:00,200\n\n\n2026-10-09T01:00,nan\n")
+    with pytest.raises(ForecastError, match=r"forecast\.csv:5: "):
         read_forecast(path)
 
 

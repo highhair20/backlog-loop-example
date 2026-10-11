@@ -56,9 +56,12 @@ def _read_rows(path: Path) -> list[tuple[int, Slot]]:
             reader = csv.DictReader(f)
             if not set(COLUMNS) <= set(reader.fieldnames or ()):
                 raise ForecastError(f"{path}: needs 'start' and 'intensity' columns")
-            return [(line, _parse_row(path, line, row)) for line, row in enumerate(reader, start=2)]
+            # line_num, not a row count: DictReader skips blank lines. It is read after
+            # each row is fetched, so it is that row's line.
+            return [(reader.line_num, _parse_row(path, reader.line_num, row)) for row in reader]
     except UnicodeDecodeError as e:
-        raise ForecastError(f"{path}: not UTF-8 text (byte {e.start}: {e.reason})") from e
+        # e.start counts from the decoder's current chunk, not the file, so it is left out.
+        raise ForecastError(f"{path}: not UTF-8 text ({e.reason})") from e
     except csv.Error as e:
         raise ForecastError(f"{path}: {e}") from e
 
@@ -92,9 +95,12 @@ def _is_aware(moment: datetime) -> bool:
 
 def _check_duplicates(path: Path, ordered: list[tuple[int, Slot]]) -> None:
     """Reject a repeated start; the sort is stable, so the later line is the one named."""
-    for (_, previous), (line, slot) in pairwise(ordered):
+    for (first_line, previous), (line, slot) in pairwise(ordered):
         if slot.start == previous.start:
-            raise ForecastError(f"{path}:{line}: duplicate start {slot.start.isoformat()}")
+            raise ForecastError(
+                f"{path}:{line}: duplicate start {slot.start.isoformat()}, "
+                f"the same time as line {first_line}"
+            )
 
 
 def slot_length(slots: list[Slot]) -> timedelta:

@@ -1,6 +1,6 @@
 import pytest
 
-from gridwindow.cli import main
+from gridwindow.cli import MAX_HOURS, main
 
 FORECAST = "start,intensity\n2026-10-09T00:00,300\n2026-10-09T01:00,100\n2026-10-09T02:00,100\n"
 
@@ -110,9 +110,30 @@ def test_rejects_a_non_finite_or_too_large_duration(tmp_path, capsys, hours):
     assert_one_line_error(capsys, "--hours")
 
 
-@pytest.mark.parametrize("power", ["nan", "inf"])
+def test_accepts_hours_up_to_the_limit(tmp_path, capsys):
+    path = tmp_path / "f.csv"
+    path.write_text(FORECAST)
+    assert main([str(path), f"--hours={MAX_HOURS}"]) == 1
+    assert_one_line_error(capsys, "shorter than the run")
+
+
+def test_rejects_hours_just_over_the_limit(tmp_path, capsys):
+    path = tmp_path / "f.csv"
+    path.write_text(FORECAST)
+    assert main([str(path), f"--hours={MAX_HOURS + 1}"]) == 1
+    assert_one_line_error(capsys, "--hours is too large")
+
+
+def test_rejects_hours_too_small_to_measure(tmp_path, capsys):
+    path = tmp_path / "f.csv"
+    path.write_text(FORECAST)
+    assert main([str(path), "--hours", "1e-300"]) == 1
+    assert_one_line_error(capsys, "--hours is too small")
+
+
+@pytest.mark.parametrize("power", ["nan", "inf", "-inf"])
 def test_rejects_a_non_finite_power(tmp_path, capsys, power):
     path = tmp_path / "f.csv"
     path.write_text(FORECAST)
-    assert main([str(path), "--hours", "1", "--power-kw", power]) == 1
+    assert main([str(path), "--hours", "1", f"--power-kw={power}"]) == 1
     assert_one_line_error(capsys, "--power-kw")
