@@ -191,6 +191,26 @@ def test_a_deadline_still_avoids_a_gap():
     assert best.mean_intensity == pytest.approx(200)
 
 
+def test_a_window_across_a_gap_does_not_meet_a_deadline():
+    forecast = gappy(
+        {
+            "2026-10-09T00:00": 100,
+            "2026-10-09T02:00": 100,
+            "2026-10-09T03:00": 100,
+            "2026-10-09T04:00": 100,
+        }
+    )
+    # 00:00-02:00 ends by 03:00 but spans the gap; every gap-free run ends later.
+    with pytest.raises(ForecastError, match="ends by"):
+        best_window(forecast, timedelta(hours=2), deadline=datetime(2026, 10, 9, 3))
+
+
+def test_a_timezone_mismatch_is_reported_before_a_gap():
+    deadline = datetime.fromisoformat("2026-10-09T03:00+00:00")
+    with pytest.raises(ForecastError, match="timezone"):
+        best_window(gappy(GAP_AT_2AM), timedelta(hours=3), deadline=deadline)
+
+
 def test_window_at_refuses_a_window_across_a_gap():
     with pytest.raises(ForecastError, match=GAP_AT_2AM_MESSAGE):
         window_at(gappy(GAP_AT_2AM), 1, timedelta(hours=2))

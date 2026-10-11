@@ -114,6 +114,8 @@ def best_window(slots: list[Slot], duration: timedelta, deadline: datetime | Non
 
     With a `deadline`, only windows that end at or before it are considered.
     """
+    if deadline is not None:
+        _check_same_timezone_kind(slots, deadline)
     step = slot_length(slots)
     count = _slot_count(slots, duration, step)
     runs = (slots[i : i + count] for i in range(len(slots) - count + 1))
@@ -124,7 +126,6 @@ def best_window(slots: list[Slot], duration: timedelta, deadline: datetime | Non
         detail = _gap_message(gap) if gap is not None else "the forecast has a gap"
         raise ForecastError(f"no {duration} run fits between gaps; {detail}")
     if deadline is not None:
-        _check_same_timezone_kind(slots, deadline)
         windows = [w for w in windows if w.end <= deadline]
         if not windows:
             raise ForecastError(f"no {duration} run ends by {deadline.isoformat()}")
