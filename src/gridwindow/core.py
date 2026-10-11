@@ -70,7 +70,7 @@ def _parse_row(path: Path, line: int, row: dict[str, str]) -> Slot:
         raise ForecastError(f"{path}:{line}: {e}") from e
     if not math.isfinite(slot.intensity):
         raise ForecastError(
-            f"{path}:{line}: intensity must be a finite number, not {row['intensity']}"
+            f"{path}:{line}: intensity must be a finite number, not {row['intensity']!r}"
         )
     if slot.intensity < 0:
         raise ForecastError(f"{path}:{line}: negative intensity {slot.intensity}")

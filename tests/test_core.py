@@ -93,6 +93,16 @@ def test_rejects_mixed_timezones_with_the_line(tmp_path):
         read_forecast(path)
 
 
+def test_rejects_a_row_without_a_timezone_after_rows_with_one(tmp_path):
+    path = write_csv(
+        tmp_path,
+        "start,intensity\n2026-10-09T00:00+00:00,300\n2026-10-09T01:00+00:00,100\n"
+        "2026-10-09T02:00,100\n",
+    )
+    with pytest.raises(ForecastError, match=r"forecast\.csv:4: .*earlier rows have a timezone"):
+        read_forecast(path)
+
+
 def test_accepts_rows_that_all_have_the_same_timezone(tmp_path):
     path = write_csv(
         tmp_path, "start,intensity\n2026-10-09T00:00+01:00,300\n2026-10-09T01:00+01:00,100\n"
@@ -115,8 +125,15 @@ def test_reports_a_file_that_is_not_utf8(tmp_path):
 
 def test_reports_an_oversized_field(tmp_path):
     path = write_csv(tmp_path, "start,intensity\n2026-10-09T00:00," + "9" * 200_000 + "\n")
-    with pytest.raises(ForecastError, match=r"forecast\.csv"):
+    with pytest.raises(ForecastError, match=r"forecast\.csv: .*field larger than field limit"):
         read_forecast(path)
+
+
+def test_a_non_finite_intensity_message_stays_on_one_line(tmp_path):
+    path = write_csv(tmp_path, 'start,intensity\n2026-10-09T00:00,"nan\n"\n')
+    with pytest.raises(ForecastError) as caught:
+        read_forecast(path)
+    assert "\n" not in str(caught.value)
 
 
 # --- best_window ---
