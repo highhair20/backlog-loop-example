@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from gridwindow.core import ForecastError, best_window, read_forecast, savings_grams, window_at
+
+# The longest run a timedelta can hold, in whole hours (about 2.4e10).
+MAX_HOURS = timedelta.max // timedelta(hours=1)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -38,11 +42,19 @@ def _iso_time(value: str) -> datetime:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if not math.isfinite(args.hours):
+        return _fail("--hours must be a finite number")
     if args.hours <= 0:
         return _fail("--hours must be more than 0")
+    if args.hours > MAX_HOURS:
+        return _fail(f"--hours is too large (at most {MAX_HOURS})")
+    if not math.isfinite(args.power_kw):
+        return _fail("--power-kw must be a finite number")
     if args.power_kw <= 0:
         return _fail("--power-kw must be more than 0")
     duration = timedelta(hours=args.hours)
+    if not duration:
+        return _fail("--hours is too small (rounds to no time at all)")
     try:
         slots = read_forecast(args.forecast)
         best = best_window(slots, duration, args.deadline)
