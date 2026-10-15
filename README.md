@@ -18,6 +18,17 @@ Start at 2026-10-09 13:00: 120 gCO2/kWh on average
 Saves 340 g CO2 versus starting now (205 gCO2/kWh)
 ```
 
+To finish by a given time, add `--deadline` with an ISO 8601 time. Only runs that
+end at or before it are considered:
+
+```console
+$ gridwindow examples/sample-day.csv --hours 2 --deadline 2026-10-09T07:00
+Start at 2026-10-09 04:00: 172 gCO2/kWh on average
+Saves 65 g CO2 versus starting now (205 gCO2/kWh)
+```
+
+Give the deadline a timezone only if the forecast's times have one.
+
 A forecast is a CSV with a `start` column (ISO 8601) and an `intensity` column
 (gCO2/kWh), one row per slot. Slots are all the same length; it takes the length from
 the first two rows. The sample in `examples/` uses made-up values. Real forecasts come
