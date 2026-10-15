@@ -8,6 +8,7 @@ window is the one with the lowest mean intensity.
 from __future__ import annotations
 
 import csv
+import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from itertools import pairwise
@@ -35,15 +36,36 @@ class Window:
 
 
 def read_forecast(path: Path) -> list[Slot]:
-    """Read a CSV with `start` (ISO 8601) and `intensity` (gCO2/kWh) columns."""
-    with path.open(newline="") as f:
-        reader = csv.DictReader(f)
-        if not set(COLUMNS) <= set(reader.fieldnames or ()):
-            raise ForecastError(f"{path}: needs 'start' and 'intensity' columns")
-        slots = [_parse_row(path, line, row) for line, row in enumerate(reader, start=2)]
-    if not slots:
+    """Read a UTF-8 CSV with `start` (ISO 8601) and `intensity` (gCO2/kWh) columns.
+
+    Start times must be unique, and either all carry a timezone or none do.
+    """
+    numbered = _read_rows(path)
+    if not numbered:
         raise ForecastError(f"{path}: no rows")
-    return sorted(slots, key=lambda s: s.start)
+    _check_timezones(path, numbered)
+    ordered = sorted(numbered, key=lambda pair: pair[1].start)
+    _check_duplicates(path, ordered)
+    return [slot for _, slot in ordered]
+
+
+def _read_rows(path: Path) -> list[tuple[int, Slot]]:
+    """Each row's slot, paired with its line number in the file."""
+    # utf-8-sig also reads a file saved with a byte-order mark, as Excel does.
+    try:
+        with path.open(newline="", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            if not set(COLUMNS) <= set(reader.fieldnames or ()):
+                raise ForecastError(f"{path}: needs 'start' and 'intensity' columns")
+            # line_num, not a row count: DictReader skips blank lines. Read after each row
+            # is fetched, it is the row's last line (its only line unless a quoted field
+            # spans lines).
+            return [(reader.line_num, _parse_row(path, reader.line_num, row)) for row in reader]
+    except UnicodeDecodeError as e:
+        # e.start counts from the decoder's current chunk, not the file, so it is left out.
+        raise ForecastError(f"{path}: not UTF-8 text ({e.reason})") from e
+    except csv.Error as e:
+        raise ForecastError(f"{path}: {e}") from e
 
 
 def _parse_row(path: Path, line: int, row: dict[str, str]) -> Slot:
@@ -51,9 +73,36 @@ def _parse_row(path: Path, line: int, row: dict[str, str]) -> Slot:
         slot = Slot(datetime.fromisoformat(row["start"]), float(row["intensity"]))
     except (TypeError, ValueError) as e:
         raise ForecastError(f"{path}:{line}: {e}") from e
+    if not math.isfinite(slot.intensity):
+        raise ForecastError(
+            f"{path}:{line}: intensity must be a finite number, not {row['intensity']!r}"
+        )
     if slot.intensity < 0:
         raise ForecastError(f"{path}:{line}: negative intensity {slot.intensity}")
     return slot
+
+
+def _check_timezones(path: Path, numbered: list[tuple[int, Slot]]) -> None:
+    """Start times with and without a timezone cannot be compared, so reject a mix."""
+    first_is_aware = _is_aware(numbered[0][1].start)
+    for line, slot in numbered:
+        if _is_aware(slot.start) != first_is_aware:
+            earlier = "a timezone" if first_is_aware else "no timezone"
+            raise ForecastError(f"{path}:{line}: mixed timezones; earlier rows have {earlier}")
+
+
+def _is_aware(moment: datetime) -> bool:
+    return moment.utcoffset() is not None
+
+
+def _check_duplicates(path: Path, ordered: list[tuple[int, Slot]]) -> None:
+    """Reject a repeated start; the sort is stable, so the later line is the one named."""
+    for (first_line, previous), (line, slot) in pairwise(ordered):
+        if slot.start == previous.start:
+            raise ForecastError(
+                f"{path}:{line}: duplicate start {slot.start.isoformat()}, "
+                f"the same time as line {first_line}"
+            )
 
 
 def slot_length(slots: list[Slot]) -> timedelta:
