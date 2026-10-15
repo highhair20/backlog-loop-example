@@ -12,6 +12,9 @@ from gridwindow.core import ForecastError, best_window, read_forecast, savings_g
 
 # The longest run a timedelta can hold, in whole hours (about 2.4e10).
 MAX_HOURS = timedelta.max // timedelta(hours=1)
+# Above about 1e15 a float no longer holds every whole-number digit, so print 4 significant
+# figures instead of a long run of meaningless ones.
+LARGE = 1e15
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -59,12 +62,18 @@ def main(argv: list[str] | None = None) -> int:
         slots = read_forecast(args.forecast)
         best = best_window(slots, duration, args.deadline)
         now = window_at(slots, 0, duration)
+        saved = savings_grams(now, best, args.power_kw)
     except (ForecastError, OSError) as e:
         return _fail(str(e))
-    saved = savings_grams(now, best, args.power_kw)
-    print(f"Start at {best.start:%Y-%m-%d %H:%M}: {best.mean_intensity:.0f} gCO2/kWh on average")
-    print(f"Saves {saved:.0f} g CO2 versus starting now ({now.mean_intensity:.0f} gCO2/kWh)")
+    best_mean, now_mean = _amount(best.mean_intensity), _amount(now.mean_intensity)
+    print(f"Start at {best.start:%Y-%m-%d %H:%M}: {best_mean} gCO2/kWh on average")
+    print(f"Saves {_amount(saved)} g CO2 versus starting now ({now_mean} gCO2/kWh)")
     return 0
+
+
+def _amount(value: float) -> str:
+    """A whole number, or 4 significant figures once whole-number digits would be noise."""
+    return f"{value:.4g}" if abs(value) >= LARGE else f"{value:.0f}"
 
 
 def _fail(message: str) -> int:

@@ -141,8 +141,29 @@ def _gap_message(gap: tuple[datetime, datetime]) -> str:
 
 
 def _window(covered: list[Slot], duration: timedelta) -> Window:
-    mean = sum(s.intensity for s in covered) / len(covered)
-    return Window(covered[0].start, covered[0].start + duration, mean)
+    return Window(covered[0].start, covered[0].start + duration, _mean(covered))
+
+
+def _mean(covered: list[Slot]) -> float:
+    """The mean intensity, which never overflows when every intensity is finite.
+
+    Each value is divided before summing, by 2n rather than n: halving is exact, so the
+    sum keeps headroom even when rounding pushes it up (three of max/3 sum past the float
+    limit). The true mean is never above the largest value, so doubling back is capped
+    there. fsum is correctly rounded, so the mean does not depend on the slots' order.
+    """
+    n = len(covered)
+    try:
+        half = math.fsum(s.intensity / (2 * n) for s in covered)
+    except ValueError:  # fsum of inf and -inf; only Slots built by hand can hold them
+        half = math.nan
+    mean = min(2 * half, max(s.intensity for s in covered))  # min keeps a nan as nan
+    if not math.isfinite(mean):
+        raise ForecastError(
+            f"the result is out of range: the mean intensity from "
+            f"{covered[0].start:{TIME}} is not a finite number"
+        )
+    return mean
 
 
 def window_at(slots: list[Slot], index: int, duration: timedelta) -> Window:
@@ -193,4 +214,9 @@ def _check_same_timezone_kind(slots: list[Slot], deadline: datetime) -> None:
 def savings_grams(now: Window, best: Window, power_kw: float) -> float:
     """CO2 saved, in grams, by running at `best` instead of `now` at `power_kw`."""
     hours = (now.end - now.start) / timedelta(hours=1)
-    return (now.mean_intensity - best.mean_intensity) * power_kw * hours
+    saved = (now.mean_intensity - best.mean_intensity) * power_kw * hours
+    if not math.isfinite(saved):
+        raise ForecastError(
+            f"the result is out of range: the CO2 saving at {power_kw:g} kW is too large"
+        )
+    return saved
