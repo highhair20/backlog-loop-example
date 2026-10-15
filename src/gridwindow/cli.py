@@ -12,8 +12,8 @@ from gridwindow.core import ForecastError, best_window, read_forecast, savings_g
 
 # The longest run a timedelta can hold, in whole hours (about 2.4e10).
 MAX_HOURS = timedelta.max // timedelta(hours=1)
-# Above about 1e15 a float no longer holds every whole-number digit, so print 4 significant
-# figures instead of a long run of meaningless ones.
+# A float holds 15 significant digits reliably; from 1e15 a whole number has 16 or more,
+# so print 4 significant figures rather than digits that are partly noise.
 LARGE = 1e15
 
 
@@ -73,7 +73,9 @@ def main(argv: list[str] | None = None) -> int:
 
 def _amount(value: float) -> str:
     """A whole number, or 4 significant figures once whole-number digits would be noise."""
-    return f"{value:.4g}" if abs(value) >= LARGE else f"{value:.0f}"
+    # Compare once rounded, so a value just under LARGE that rounds up to it is not
+    # printed as 16 digits.
+    return f"{value:.4g}" if abs(round(value)) >= LARGE else f"{value:.0f}"
 
 
 def _fail(message: str) -> int:

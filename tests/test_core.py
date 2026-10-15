@@ -411,11 +411,29 @@ def test_a_mean_at_the_float_limit_is_still_answered():
     [[math.inf, 100], [math.nan, 100], [math.inf, -math.inf]],
     ids=["inf", "nan", "inf-and-minus-inf"],
 )
-def test_a_mean_that_is_not_finite_raises(intensities):
+def test_a_non_finite_intensity_in_hand_built_slots_is_named(intensities):
     # read_forecast rejects these, so only a caller building Slots by hand can pass them.
     forecast = slots("2026-10-09T00:00", 60, intensities)
-    with pytest.raises(ForecastError, match="out of range: the mean intensity"):
+    with pytest.raises(ForecastError, match="slot at 2026-10-09 00:00 has a non-finite"):
         best_window(forecast, timedelta(hours=2))
+
+
+def test_equal_means_tie_exactly_when_the_sum_overflows():
+    q = 2.0**1020  # the float limit is just under 16q
+    # 00:00 [4q, 14q, 12q] and 03:00 [10q, 10q, 10q] both average 10q; both sums overflow.
+    forecast = slots("2026-10-09T00:00", 60, [4 * q, 14 * q, 12 * q, 10 * q, 10 * q, 10 * q])
+    best = best_window(forecast, timedelta(hours=3))
+    assert best.start == datetime(2026, 10, 9, 0)
+    assert best.mean_intensity == 10 * q
+
+
+def test_a_saving_is_answered_when_only_a_partial_product_overflows():
+    forecast = slots("2026-10-09T00:00", 30, [1.5e308, 0, 0])
+    duration = timedelta(minutes=30)
+    now = window_at(forecast, 0, duration)
+    best = best_window(forecast, duration)
+    # 1.5e308 * 2 kW overflows, but * 0.5 h brings the saving back to 1.5e308.
+    assert savings_grams(now, best, power_kw=2) == pytest.approx(1.5e308)
 
 
 def test_a_saving_that_overflows_raises():
@@ -424,8 +442,19 @@ def test_a_saving_that_overflows_raises():
     now = window_at(forecast, 0, duration)
     best = best_window(forecast, duration)
     # (200 - 100) gCO2/kWh * 1e308 kW * 2 h is past the float limit.
-    with pytest.raises(ForecastError, match="out of range: the CO2 saving"):
+    with pytest.raises(ForecastError, match="out of range: the CO2 saving") as caught:
         savings_grams(now, best, power_kw=1e308)
+    # The message names every factor, not only the power.
+    assert "(100 gCO2/kWh at 1e+308 kW for 2 h)" in str(caught.value)
+
+
+def test_a_saving_from_huge_intensities_at_ordinary_power_raises():
+    forecast = slots("2026-10-09T00:00", 60, [1.7e308, 1.7e308, 0, 0])
+    duration = timedelta(hours=2)
+    now = window_at(forecast, 0, duration)
+    best = best_window(forecast, duration)
+    with pytest.raises(ForecastError, match=r"\(1\.7e\+308 gCO2/kWh at 1 kW for 2 h\)"):
+        savings_grams(now, best, power_kw=1)
 
 
 def test_windows_with_equal_means_still_tie_exactly():

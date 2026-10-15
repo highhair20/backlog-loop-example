@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from gridwindow.cli import MAX_HOURS, main
+from gridwindow.cli import MAX_HOURS, _amount, main
 
 FORECAST = "start,intensity\n2026-10-09T00:00,300\n2026-10-09T01:00,100\n2026-10-09T02:00,100\n"
 
@@ -274,3 +274,12 @@ def test_the_readable_form_starts_at_1e15(tmp_path, capsys, power, saving):
     # (200 - 100) gCO2/kWh * power * 2 h
     assert main([str(path), "--hours", "2", "--power-kw", power]) == 0
     assert saving in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("value", "text"),
+    [(999999999999999.4, "999999999999999"), (999999999999999.6, "1e+15")],
+    ids=["rounds-down-below", "rounds-up-to-1e15"],
+)
+def test_a_value_that_rounds_up_to_1e15_takes_the_readable_form(value, text):
+    assert _amount(value) == text

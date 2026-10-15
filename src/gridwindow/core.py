@@ -145,25 +145,18 @@ def _window(covered: list[Slot], duration: timedelta) -> Window:
 
 
 def _mean(covered: list[Slot]) -> float:
-    """The mean intensity, which never overflows when every intensity is finite."""
-    values = [s.intensity for s in covered]
-    try:
-        mean = _summed_mean(values)
-    except ValueError:  # fsum of inf and -inf; only Slots built by hand can hold them
-        mean = math.nan
-    if not math.isfinite(mean):
-        raise ForecastError(
-            f"the result is out of range: the mean intensity from "
-            f"{covered[0].start:{TIME}} is not a finite number"
-        )
-    return mean
+    """The mean intensity: always finite, since every intensity must be.
 
-
-def _summed_mean(values: list[float]) -> float:
-    """Sum, then divide: exact for whole-number data, so equal means tie exactly.
-
-    fsum is correctly rounded, so the result does not depend on the slots' order.
+    Sum, then divide: exact for whole-number data, so equal means tie exactly. fsum is
+    correctly rounded, so the result does not depend on the slots' order.
     """
+    for slot in covered:
+        if not math.isfinite(slot.intensity):
+            # read_forecast rejects these, so only Slots built by hand can hold them.
+            raise ForecastError(
+                f"the slot at {slot.start:{TIME}} has a non-finite intensity {slot.intensity}"
+            )
+    values = [s.intensity for s in covered]
     try:
         total = math.fsum(values)
     except OverflowError:  # finite values whose sum passes the float limit
@@ -172,14 +165,16 @@ def _summed_mean(values: list[float]) -> float:
 
 
 def _scaled_mean(values: list[float]) -> float:
-    """The mean of values whose sum overflows: divide each by 2n, sum, then double back.
+    """The mean of finite values whose sum overflows.
 
-    Halving is exact, so the sum keeps headroom even when rounding pushes it up (three
-    of max/3 sum past the float limit). The true mean is never above the largest value,
-    so doubling back is capped there.
+    Each value is scaled by 2**-k, with 2**k > n. A power-of-two scale is exact, so the
+    scaled sum cannot overflow, and dividing it then scaling back rounds just as
+    sum-then-divide would: equal means still tie exactly. The true mean is never above
+    the largest value, so the result is capped there in case rounding passed the limit.
     """
-    n = len(values)
-    return min(2 * math.fsum(v / (2 * n) for v in values), max(values))
+    k = len(values).bit_length()
+    total = math.fsum(math.ldexp(v, -k) for v in values)
+    return min(total / len(values) * 2.0**k, max(values))
 
 
 def window_at(slots: list[Slot], index: int, duration: timedelta) -> Window:
@@ -230,9 +225,22 @@ def _check_same_timezone_kind(slots: list[Slot], deadline: datetime) -> None:
 def savings_grams(now: Window, best: Window, power_kw: float) -> float:
     """CO2 saved, in grams, by running at `best` instead of `now` at `power_kw`."""
     hours = (now.end - now.start) / timedelta(hours=1)
-    saved = (now.mean_intensity - best.mean_intensity) * power_kw * hours
+    difference = now.mean_intensity - best.mean_intensity
+    saved = _product(difference, power_kw, hours)
     if not math.isfinite(saved):
         raise ForecastError(
-            f"the result is out of range: the CO2 saving at {power_kw:g} kW is too large"
+            f"the result is out of range: the CO2 saving ({difference:.4g} gCO2/kWh "
+            f"at {power_kw:g} kW for {hours:g} h) is too large"
         )
     return saved
+
+
+def _product(a: float, b: float, c: float) -> float:
+    """a * b * c, smallest by largest first, so no partial product overflows on its own.
+
+    If the smallest factor is below 1, smallest * largest is at most the largest; if
+    not, every partial product is at most the whole. Either way only a product that is
+    itself too large overflows.
+    """
+    low, middle, high = sorted((a, b, c), key=abs)
+    return low * high * middle
