@@ -2,13 +2,16 @@ from pathlib import Path
 
 import pytest
 
-from gridwindow.cli import MAX_HOURS, main
+from gridwindow.cli import MAX_HOURS, _amount, main
 
 FORECAST = "start,intensity\n2026-10-09T00:00,300\n2026-10-09T01:00,100\n2026-10-09T02:00,100\n"
 
 
 def assert_one_line_error(capsys, *fragments: str) -> None:
-    err = capsys.readouterr().err
+    assert_one_line_error_text(capsys.readouterr().err, *fragments)
+
+
+def assert_one_line_error_text(err: str, *fragments: str) -> None:
     assert err.startswith("gridwindow: ")
     assert err.count("\n") == 1
     assert "Traceback" not in err
@@ -225,3 +228,58 @@ def test_rejects_a_non_finite_power(tmp_path, capsys, power):
     path.write_text(FORECAST)
     assert main([str(path), "--hours", "1", f"--power-kw={power}"]) == 1
     assert_one_line_error(capsys, "--power-kw")
+
+
+# --- huge but finite values: a readable answer or one line, never inf ---
+
+
+def test_a_saving_too_large_to_compute_exits_1(capsys):
+    sample = Path(__file__).parent.parent / "examples" / "sample-day.csv"
+    assert main([str(sample), "--hours", "2", "--power-kw", "1e308"]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert_one_line_error_text(captured.err, "out of range")
+
+
+def test_huge_means_print_in_a_readable_form(tmp_path, capsys):
+    path = tmp_path / "f.csv"
+    path.write_text(
+        "start,intensity\n2026-10-09T00:00,1e308\n2026-10-09T01:00,1e308\n2026-10-09T02:00,1\n"
+    )
+    assert main([str(path), "--hours", "2"]) == 0
+    out = capsys.readouterr().out
+    assert out == (
+        "Start at 2026-10-09 01:00: 5e+307 gCO2/kWh on average\n"
+        "Saves 1e+308 g CO2 versus starting now (1e+308 gCO2/kWh)\n"
+    )
+
+
+def test_ordinary_values_still_print_as_whole_numbers(tmp_path, capsys):
+    path = tmp_path / "f.csv"
+    path.write_text(FORECAST)
+    # (200 - 100) gCO2/kWh * 1e9 kW * 2 h = 2e11 g, below the readable-form threshold.
+    assert main([str(path), "--hours", "2", "--power-kw", "1e9"]) == 0
+    out = capsys.readouterr().out
+    assert "Saves 200000000000 g CO2 versus starting now (200 gCO2/kWh)" in out
+
+
+@pytest.mark.parametrize(
+    ("power", "saving"),
+    [("4.99e12", "Saves 998000000000000 g"), ("5e12", "Saves 1e+15 g")],
+    ids=["just-under-1e15", "at-1e15"],
+)
+def test_the_readable_form_starts_at_1e15(tmp_path, capsys, power, saving):
+    path = tmp_path / "f.csv"
+    path.write_text(FORECAST)
+    # (200 - 100) gCO2/kWh * power * 2 h
+    assert main([str(path), "--hours", "2", "--power-kw", power]) == 0
+    assert saving in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("value", "text"),
+    [(999999999999999.4, "999999999999999"), (999999999999999.6, "1e+15")],
+    ids=["rounds-down-below", "rounds-up-to-1e15"],
+)
+def test_a_value_that_rounds_up_to_1e15_takes_the_readable_form(value, text):
+    assert _amount(value) == text

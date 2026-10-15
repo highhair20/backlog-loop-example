@@ -141,8 +141,40 @@ def _gap_message(gap: tuple[datetime, datetime]) -> str:
 
 
 def _window(covered: list[Slot], duration: timedelta) -> Window:
-    mean = sum(s.intensity for s in covered) / len(covered)
-    return Window(covered[0].start, covered[0].start + duration, mean)
+    return Window(covered[0].start, covered[0].start + duration, _mean(covered))
+
+
+def _mean(covered: list[Slot]) -> float:
+    """The mean intensity: always finite, since every intensity must be.
+
+    Sum, then divide: exact for whole-number data, so equal means tie exactly. fsum is
+    correctly rounded, so the result does not depend on the slots' order.
+    """
+    for slot in covered:
+        if not math.isfinite(slot.intensity):
+            # read_forecast rejects these, so only Slots built by hand can hold them.
+            raise ForecastError(
+                f"the slot at {slot.start:{TIME}} has a non-finite intensity {slot.intensity}"
+            )
+    values = [s.intensity for s in covered]
+    try:
+        total = math.fsum(values)
+    except OverflowError:  # finite values whose sum passes the float limit
+        return _scaled_mean(values)
+    return total / len(values)
+
+
+def _scaled_mean(values: list[float]) -> float:
+    """The mean of finite values whose sum overflows.
+
+    Each value is scaled by 2**-k, with 2**k > n. A power-of-two scale is exact, so the
+    scaled sum cannot overflow, and dividing it then scaling back rounds just as
+    sum-then-divide would: equal means still tie exactly. The true mean is never above
+    the largest value, so the result is capped there in case rounding passed the limit.
+    """
+    k = len(values).bit_length()
+    total = math.fsum(math.ldexp(v, -k) for v in values)
+    return min(total / len(values) * 2.0**k, max(values))
 
 
 def window_at(slots: list[Slot], index: int, duration: timedelta) -> Window:
@@ -193,4 +225,22 @@ def _check_same_timezone_kind(slots: list[Slot], deadline: datetime) -> None:
 def savings_grams(now: Window, best: Window, power_kw: float) -> float:
     """CO2 saved, in grams, by running at `best` instead of `now` at `power_kw`."""
     hours = (now.end - now.start) / timedelta(hours=1)
-    return (now.mean_intensity - best.mean_intensity) * power_kw * hours
+    difference = now.mean_intensity - best.mean_intensity
+    saved = _product(difference, power_kw, hours)
+    if not math.isfinite(saved):
+        raise ForecastError(
+            f"the result is out of range: the CO2 saving ({difference:.4g} gCO2/kWh "
+            f"at {power_kw:g} kW for {hours:g} h) is too large"
+        )
+    return saved
+
+
+def _product(a: float, b: float, c: float) -> float:
+    """a * b * c, smallest by largest first, so no partial product overflows on its own.
+
+    If the smallest factor is below 1, smallest * largest is at most the largest; if
+    not, every partial product is at most the whole. Either way only a product that is
+    itself too large overflows.
+    """
+    low, middle, high = sorted((a, b, c), key=abs)
+    return low * high * middle
