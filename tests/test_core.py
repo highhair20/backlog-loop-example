@@ -18,6 +18,9 @@ def slots(start: str, step_minutes: int, intensities: list[float]) -> list[Slot]
     return [Slot(t0 + i * step, v) for i, v in enumerate(intensities)]
 
 
+HALF_HOURLY = [300, 280, 120, 90, 60, 250, 310]
+
+
 def write_csv(tmp_path, text: str):
     path = tmp_path / "forecast.csv"
     path.write_text(text)
@@ -171,6 +174,20 @@ def test_infers_half_hour_slots():
     best = best_window(forecast, timedelta(hours=1))
     assert best.start == datetime(2026, 10, 9, 0, 30)
     assert best.mean_intensity == pytest.approx(55)
+
+
+def test_finds_a_one_and_a_half_hour_window_in_half_hour_slots():
+    forecast = slots("2026-10-09T00:00", 30, HALF_HOURLY)
+    best = best_window(forecast, timedelta(hours=1.5))
+    assert best.start == datetime(2026, 10, 9, 1)
+    assert best.end == datetime(2026, 10, 9, 2, 30)
+    assert best.mean_intensity == pytest.approx(90)  # (120 + 90 + 60) / 3
+
+
+def test_rejects_a_run_that_is_not_whole_half_hour_slots():
+    forecast = slots("2026-10-09T00:00", 30, HALF_HOURLY)
+    with pytest.raises(ForecastError, match="whole number"):
+        best_window(forecast, timedelta(minutes=45))
 
 
 def test_rejects_a_duration_that_is_not_whole_slots():
@@ -345,3 +362,13 @@ def test_savings_compare_with_starting_now():
     best = best_window(forecast, duration)
     # now: mean 200; best: mean 100; 2 h at 1.5 kW = 3 kWh -> 300 g saved
     assert savings_grams(now, best, power_kw=1.5) == pytest.approx(300)
+
+
+def test_savings_in_half_hour_slots_use_hours_not_slot_count():
+    forecast = slots("2026-10-09T00:00", 30, HALF_HOURLY)
+    duration = timedelta(hours=1.5)
+    now = window_at(forecast, 0, duration)
+    best = best_window(forecast, duration)
+    # now: mean 233.3; best: mean 90; 1.5 h (3 slots) at 2 kW = 3 kWh -> 430 g saved.
+    # Counting slots as hours would give 860 g.
+    assert savings_grams(now, best, power_kw=2) == pytest.approx(430)

@@ -31,7 +31,9 @@ Give the deadline a timezone only if the forecast's times have one.
 
 A forecast is a CSV with a `start` column (ISO 8601) and an `intensity` column
 (gCO2/kWh), one row per slot. Slots are all the same length; it takes the length from
-the first two rows. The sample in `examples/` uses made-up values. Real forecasts come
+the first two rows, so a fixed length such as hourly or half-hourly works.
+`--hours` must be a whole number of slots, so `--hours 1.5` works on a half-hourly
+forecast but not on an hourly one. The sample in `examples/` uses made-up values. Real forecasts come
 from grid operators, for example the [Carbon Intensity API](https://carbonintensity.org.uk/)
 for Great Britain.
 
