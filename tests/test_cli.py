@@ -261,3 +261,16 @@ def test_ordinary_values_still_print_as_whole_numbers(tmp_path, capsys):
     assert main([str(path), "--hours", "2", "--power-kw", "1e9"]) == 0
     out = capsys.readouterr().out
     assert "Saves 200000000000 g CO2 versus starting now (200 gCO2/kWh)" in out
+
+
+@pytest.mark.parametrize(
+    ("power", "saving"),
+    [("4.99e12", "Saves 998000000000000 g"), ("5e12", "Saves 1e+15 g")],
+    ids=["just-under-1e15", "at-1e15"],
+)
+def test_the_readable_form_starts_at_1e15(tmp_path, capsys, power, saving):
+    path = tmp_path / "f.csv"
+    path.write_text(FORECAST)
+    # (200 - 100) gCO2/kWh * power * 2 h
+    assert main([str(path), "--hours", "2", "--power-kw", power]) == 0
+    assert saving in capsys.readouterr().out

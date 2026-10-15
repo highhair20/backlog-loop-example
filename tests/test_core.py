@@ -428,7 +428,16 @@ def test_a_saving_that_overflows_raises():
         savings_grams(now, best, power_kw=1e308)
 
 
-def test_ordinary_means_are_unchanged_by_dividing_first():
+def test_windows_with_equal_means_still_tie_exactly():
+    # 00:00 [1, 1, 4] and 03:00 [2, 2, 2] both average 2; dividing each value by 3 before
+    # summing could round them apart and pick 03:00.
+    forecast = slots("2026-10-09T00:00", 60, [1, 1, 4, 2, 2, 2])
+    best = best_window(forecast, timedelta(hours=3))
+    assert best.start == datetime(2026, 10, 9, 0)
+    assert best.mean_intensity == 2
+
+
+def test_ordinary_means_are_unchanged():
     forecast = slots("2026-10-09T00:00", 60, [100, 200, 300, 0, 0, 600])
     best = best_window(forecast, timedelta(hours=3))
     # 3 h windows from 00:00, 01:00, 02:00, 03:00 average 200, 166.7, 100, 200.

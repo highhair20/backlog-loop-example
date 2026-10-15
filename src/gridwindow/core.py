@@ -145,25 +145,41 @@ def _window(covered: list[Slot], duration: timedelta) -> Window:
 
 
 def _mean(covered: list[Slot]) -> float:
-    """The mean intensity, which never overflows when every intensity is finite.
-
-    Each value is divided before summing, by 2n rather than n: halving is exact, so the
-    sum keeps headroom even when rounding pushes it up (three of max/3 sum past the float
-    limit). The true mean is never above the largest value, so doubling back is capped
-    there. fsum is correctly rounded, so the mean does not depend on the slots' order.
-    """
-    n = len(covered)
+    """The mean intensity, which never overflows when every intensity is finite."""
+    values = [s.intensity for s in covered]
     try:
-        half = math.fsum(s.intensity / (2 * n) for s in covered)
+        mean = _summed_mean(values)
     except ValueError:  # fsum of inf and -inf; only Slots built by hand can hold them
-        half = math.nan
-    mean = min(2 * half, max(s.intensity for s in covered))  # min keeps a nan as nan
+        mean = math.nan
     if not math.isfinite(mean):
         raise ForecastError(
             f"the result is out of range: the mean intensity from "
             f"{covered[0].start:{TIME}} is not a finite number"
         )
     return mean
+
+
+def _summed_mean(values: list[float]) -> float:
+    """Sum, then divide: exact for whole-number data, so equal means tie exactly.
+
+    fsum is correctly rounded, so the result does not depend on the slots' order.
+    """
+    try:
+        total = math.fsum(values)
+    except OverflowError:  # finite values whose sum passes the float limit
+        return _scaled_mean(values)
+    return total / len(values)
+
+
+def _scaled_mean(values: list[float]) -> float:
+    """The mean of values whose sum overflows: divide each by 2n, sum, then double back.
+
+    Halving is exact, so the sum keeps headroom even when rounding pushes it up (three
+    of max/3 sum past the float limit). The true mean is never above the largest value,
+    so doubling back is capped there.
+    """
+    n = len(values)
+    return min(2 * math.fsum(v / (2 * n) for v in values), max(values))
 
 
 def window_at(slots: list[Slot], index: int, duration: timedelta) -> Window:
