@@ -98,9 +98,7 @@ def test_a_deadline_with_no_fitting_window_exits_1(tmp_path, capsys):
     path = tmp_path / "f.csv"
     path.write_text(FORECAST)
     assert main([str(path), "--hours", "2", "--deadline", "2026-10-09T01:00"]) == 1
-    err = capsys.readouterr().err
-    assert err.startswith("gridwindow: ")
-    assert err.count("\n") == 1
+    assert_one_line_error(capsys, "ends by 2026-10-09T01:00")
 
 
 def test_a_deadline_timezone_mismatch_exits_1(tmp_path, capsys):
